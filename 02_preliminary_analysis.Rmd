@@ -1,0 +1,303 @@
+---
+title: "02_preliminary_analyses"
+output: github_document
+keep_html: TRUE
+---
+
+```{r Packages}
+if (!require("car")) {install.packages("car"); require("car")}
+if (!require("dplyr")) {install.packages("dplyr"); require("dplyr")}
+if (!require("ggplot2")) {install.packages("ggplot2"); require("ggplot2")}
+if (!require("lme4")) {install.packages("lme4"); require("lme4")}
+if (!require("pwr")) {install.packages("pwr"); require("pwr")}
+if (!require("rmcorr")) {install.packages("rmcorr"); require("rmcorr")}
+if (!require("tidyverse")) {install.packages("tidyverse"); require("tidyverse")}
+```
+
+```{r Data}
+coping_data_filtered <- read.csv("Created_datasets/Secondary_coping_data_2024_07_12.csv") 
+```
+
+```{r Functions}
+# Repeated measures power 
+
+power.rmcorr <- function(k, N, effectsizer, sig) {
+    pwr.r.test(n = ((N)*(k-1))+1,
+               r = effectsizer, 
+               sig.level = sig) } 
+```
+
+# repeated-measures associations
+```{r rmcorr prelim}
+plf_four_wave <- rmcorr_mat(id, 
+                             variables = c("srcsi", "srcse", "srcs17",
+                                           "inq_tb", "inq_pb", "bhs", "bdi", "ssi", "rls"
+                                           ), 
+                             Coping_data_filtered, 
+                             CI.level = 0.95)
+
+# extract results
+(table_rm_all <- plf_four_wave$summary)
+
+# save table for main and supplementary results
+write.csv(table_rm_all, "02_Output/table_rmcorr.csv")
+
+# look at p vals correcting for multiple comparisons
+p.vals <- plf_four_wave$summary$p.vals
+
+(p.vals.bonferroni <- p.adjust(p.vals, 
+                              method = "bonferroni",
+                              n = length(p.vals)))
+
+# power 
+power.rmcorr(3, 98, .2, .05)
+```
+
+# multilevel reliability; tables from this script are in supplement 2
+```{r reliability prelim}
+# depression
+depr_long <- mlArrange(Coping_data_filtered, 
+                       grp = "id", 
+                       Time = "month", 
+                       items = c("q01_bdi", "q02_bdi", "q03_bdi", "q04_bdi", "q05_bdi",
+                                 "q06_bdi", "q07_bdi", "q08_bdi", "q09_bdi", "q10_bdi",
+                                 "q11_bdi", "q12_bdi", "q13_bdi", "q14_bdi", 
+                                 "q15_bdi", "q16_bdi", "q17_bdi", "q18_bdi", "q19_bdi",
+                                 "q20_bdi", "q21_bdi"),
+                       extra = NULL)
+
+bdi_reliable <- psych::multilevel.reliability(depr_long, 
+                       grp = "id", 
+                       Time = "month", 
+                       items = "items",
+                       alpha = TRUE,
+                       icc = TRUE,
+                       aov = FALSE,
+                       lmer =TRUE,
+                       lme = TRUE,
+                       long = TRUE,
+                       values = "values",
+                       na.action ="na.omit",
+                       plot = FALSE) 
+bdi_reliable
+bdi_reliable$s.lme 
+bdi_reliable$s.lmer
+
+# coping 
+SRC_items <- Coping_data_filtered %>%
+  dplyr::select(month, id, matches("^q\\d{2}_srcs$")) %>%
+  dplyr::select(-matches("^q(02|07|15|21)_srcs$"))
+
+cope <- mlArrange(Coping_data_filtered, 
+                           grp = "id", 
+                           Time = "month", 
+                           items = c("q01_srcs", "q03_srcs", "q04_srcs", "q05_srcs", 
+                                     "q06_srcs", "q08_srcs", "q09_srcs", "q10_srcs",
+                                     "q11_srcs", "q12_srcs", "q13_srcs", "q14_srcs", 
+                                     "q16_srcs", "q17_srcs", "q18_srcs", "q19_srcs",
+                                     "q20_srcs"),extra = NULL)
+
+cope_reliable <- psych::multilevel.reliability(cope, 
+                       grp = "id", 
+                       Time = "month", 
+                       items = "items",
+                       alpha = TRUE,
+                       icc = TRUE,
+                       aov = FALSE,
+                       lmer =TRUE,
+                       lme = TRUE,
+                       long = TRUE,
+                       values = "values",
+                       na.action ="na.omit",
+                       plot = FALSE) 
+cope_reliable
+cope_reliable$s.lme 
+cope_reliable$s.lmer
+
+# interpersonal
+
+inq_long <- mlArrange(Coping_data_filtered, 
+                      grp = "id", 
+                      Time = "month", 
+                      items = c("q01_inq", "q02_inq", "q03_inq", "q04_inq", "q05_inq",
+                                "q06_inq", "q07_inq", "q08_inq", "q09_inq", "q10_inq",
+                                "q11_inq", "q12_inq", "q13_inq", "q14_inq", "q15_inq"),
+                      extra = NULL)
+
+needs_reliable <- psych::multilevel.reliability(inq_long, 
+                       grp = "id", 
+                       Time = "month", 
+                       items = "items",
+                       alpha = TRUE,
+                       icc = TRUE,
+                       aov = FALSE,
+                       lmer =TRUE,
+                       lme = TRUE,
+                       long = TRUE,
+                       values = "values",
+                       na.action ="na.omit",
+                       plot = FALSE) 
+needs_reliable
+needs_reliable$s.lmer
+needs_reliable$s.lme 
+
+# hopelessness
+
+hope_long <- mlArrange(Coping_data_filtered, 
+                       grp = "id", 
+                       Time = "month", 
+                       items = c("q01_bhs", "q02_bhs", "q03_bhs", "q04_bhs", "q05_bhs",
+                                 "q06_bhs", "q07_bhs", "q08_bhs", "q09_bhs", "q10_bhs",
+                                 "q11_bhs", "q12_bhs", "q13_bhs", "q14_bhs",  "q15_bhs",
+                                 "q16_bhs", "q17_bhs", "q18_bhs", "q19_bhs", "q20_bhs"),
+                       extra = NULL)
+
+hope_reliable <- psych::multilevel.reliability(hope_long, 
+                       grp = "id", 
+                       Time = "month", 
+                       items = "items",
+                       alpha = TRUE,
+                       icc = TRUE,
+                       aov = FALSE,
+                       lmer =TRUE,
+                       lme = TRUE,
+                       long = TRUE,
+                       values = "values",
+                       na.action ="na.omit",
+                       plot = FALSE) 
+hope_reliable
+hope_reliable$s.lmer
+hope_reliable$s.lme 
+
+# reasons for living
+rsli_long <- mlArrange(Coping_data_filtered, 
+                       grp = "id", 
+                       Time = "month", 
+                       items = c("q01_rli", "q02_rli", "q03_rli", "q04_rli", "q05_rli",
+                                 "q06_rli", "q07_rli",  "q08_rli", "q09_rli", "q10_rli",
+                                 "q11_rli", "q12_rli", "q13_rli", "q14_rli", "q15_rli",
+                                 "q16_rli", "q17_rli", "q18_rli", "q19_rli", "q20_rli",
+                                 "q21_rli", "q22_rli", "q23_rli", "q24_rli", "q25_rli",
+                                 "q26_rli", "q27_rli", "q28_rli", "q29_rli", "q30_rli",
+                                 "q31_rli", "q32_rli", "q33_rli", "q34_rli", "q35_rli", 
+                                 "q36_rli", "q37_rli", "q38_rli", "q39_rli", "q40_rli",
+                                 "q41_rli", "q42_rli", "q43_rli", "q44_rli", "q45_rli",
+                                 "q46_rli", "q47_rli", "q48_rli"),
+                        extra = NULL)
+
+reasons_reliable <- psych::multilevel.reliability(rsli_long, 
+                       grp = "id", 
+                       Time = "month", 
+                       items = "items",
+                       alpha = TRUE,
+                       icc = TRUE,
+                       aov = FALSE,
+                       lmer =TRUE,
+                       lme = TRUE,
+                       long = TRUE,
+                       values = "values",
+                       na.action ="na.omit",
+                       plot = FALSE) 
+reasons_reliable
+reasons_reliable$s.lmer
+
+# burden
+
+inq_long <- mlArrange(Coping_data_filtered, grp = "id", Time = "month", 
+          items = c("q01_inq", "q02_inq", "q03_inq", "q04_inq", "q05_inq", "q06_inq", 
+                    "q07_inq", "q08_inq", "q09_inq", "q10_inq", "q11_inq", "q12_inq", 
+                    "q13_inq", "q14_inq", "q15_inq"),extra=NULL)
+
+inq_pb_long <- mlArrange(Coping_data_filtered, grp = "id", Time = "month", 
+          items = c("q01_inq", "q02_inq", "q03_inq", "q04_inq", "q05_inq", "q06_inq"),extra=NULL)
+
+pb_reliable <- psych::multilevel.reliability(inq_pb_long, 
+                       grp = "id", 
+                       Time = "month", 
+                       items = "items",
+                       alpha = TRUE,
+                       icc = TRUE,
+                       aov = FALSE,
+                       lmer =TRUE,
+                       lme = TRUE,
+                       long = TRUE,
+                       values = "values",
+                       na.action ="na.omit",
+                       plot = FALSE) 
+pb_reliable
+pb_reliable$s.lme 
+pb_reliable$s.lmer
+
+# belonging
+
+inq_tb_long <- mlArrange(Coping_data_filtered, grp = "id", Time = "month", 
+          items = c("q07_inq", "q08_inq", "q09_inq", 
+                    "q10_inq", "q11_inq", "q12_inq", 
+                    "q13_inq", "q14_inq", "q15_inq"),extra=NULL)
+
+tb_reliable <- psych::multilevel.reliability(inq_tb_long, 
+                       grp = "id", 
+                       Time = "month", 
+                       items = "items",
+                       alpha = TRUE,
+                       icc = TRUE,
+                       aov = FALSE,
+                       lmer =TRUE,
+                       lme = TRUE,
+                       long = TRUE,
+                       values = "values",
+                       na.action ="na.omit",
+                       plot = FALSE) 
+tb_reliable
+tb_reliable$s.lme 
+tb_reliable$s.lmer
+
+# external coping 
+
+Ext_cope_long <- mlArrange(Coping_data_filtered, 
+                           grp = "id", 
+                           Time = "month", 
+                           items = c("q01_srcs", "q04_srcs", "q05_srcs", "q09_srcs", 
+                                     "q11_srcs", "q14_srcs", "q20_srcs"),extra = NULL)
+
+Int_cope_long <- mlArrange(Coping_data_filtered, 
+                           grp = "id", 
+                           Time = "month", 
+                           items = c("q03_srcs", "q06_srcs", "q10_srcs", "q12_srcs", 
+                                     "q16_srcs", "q17_srcs", "q18_srcs"),extra = NULL)
+
+Ext_cope_reliable <- psych::multilevel.reliability(Ext_cope_long, 
+                       grp = "id", 
+                       Time = "month", 
+                       items = "items",
+                       alpha = TRUE,
+                       icc = TRUE,
+                       aov = FALSE,
+                       lmer =TRUE,
+                       lme = TRUE,
+                       long = TRUE,
+                       values = "values",
+                       na.action ="na.omit",
+                       plot = FALSE) 
+Ext_cope_reliable
+Ext_cope_reliable$s.lme 
+Ext_cope_reliable$s.lmer
+
+Int_cope_reliable <- psych::multilevel.reliability(Int_cope_long, 
+                       grp = "id", 
+                       Time = "month", 
+                       items = "items",
+                       alpha = TRUE,
+                       icc = TRUE,
+                       aov = FALSE,
+                       lmer =TRUE,
+                       lme = TRUE,
+                       long = TRUE,
+                       values = "values",
+                       na.action ="na.omit",
+                       plot = FALSE) 
+Int_cope_reliable
+Int_cope_reliable$s.lme 
+Int_cope_reliable$s.lmer
+```
+

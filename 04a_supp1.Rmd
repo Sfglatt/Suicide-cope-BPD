@@ -1,0 +1,44 @@
+---
+title: "04a_supp1"
+output: github_document
+keep_html: TRUE
+---
+
+```{r Packages}
+if (!require("apaTables")) {install.packages("apaTables"); require("apaTables")} 
+if (!require("dplyr")) {install.packages("dplyr"); require("dplyr")}
+```
+
+```{r Data}
+coping_data_filtered <- read.csv("Created_datasets/Secondary_coping_data_2024_07_12.csv") 
+```
+
+# For R&R, add SRCS item-level correlations + Ms, SDs, ranges
+```{r SRCS descriptives}
+# SRC items at baseline
+SRC_items <- coping_data_filtered %>%
+  filter(month == 0) %>%  
+  select(id, matches("^q\\d{2}_srcs$")) %>%  
+  select(-matches("^q(02|07|15|21)_srcs$"))  
+
+SRC_items <- SRC_items %>%
+  select(-id)
+
+# Inter-item correlation matrix + means and SDs
+(Corr_table <- apa.cor.table(SRC_items, 
+                             filename = paste0("04a_Output/RR_SRC_correlations_SG_", 
+                                              format(Sys.Date(), "%Y-%m-%d"),
+                                              ".doc"),
+                             table.number = 1, 
+                             show.conf.interval = TRUE, 
+                             show.sig.stars = TRUE, 
+                             landscape = TRUE))
+
+Corr_table$table.body
+Corr_table_df <- as.data.frame(Corr_table$table.body)
+write.csv(Corr_table_df, paste0("04a_Output/RR_SRC_correlations_SG_", Sys.Date(), ".csv")) 
+
+# Look at / add range column
+SRC_items %>%
+  sapply(function(x) range(x, na.rm = TRUE))
+```

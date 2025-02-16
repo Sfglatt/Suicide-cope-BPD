@@ -1,0 +1,276 @@
+---
+title: "01_dataset_methods"
+output: github_document
+keep_html: TRUE
+---
+
+
+```{r Packages}
+if (!require("dplyr")) {install.packages("dplyr"); require("dplyr")}
+if (!require("psych")) {install.packages("psych"); require("psych")}
+if (!require("tidyverse")) {install.packages("tidyverse"); require("tidyverse")}
+```
+
+```{r Data}
+merged_plf <- read.csv("Raw_datasets/Merged_plf_data_2024_07_12.csv")
+# This is the PLF merged data from git/PLF; "01_Data_clean_merging" R script from July 2024
+```
+
+```{r Filter}
+table(merged_plf$bpd) # 1 = positive BPD screen on the MSI-BPD
+
+# Fill BPD screen to all waves
+filled_merged_plf <- merged_plf %>%
+  group_by(id) %>%
+  fill(bpd, .direction = "downup") %>%
+  ungroup()
+
+Coping_data <- filled_merged_plf %>%
+  filter(bpd == 1)
+
+# Filter for people who only have 2 waves
+
+total_time_points <- 4 
+
+# Grouping by participant ID and counting the number of timepoints they have for each variable
+(time_points_summary <- Coping_data %>%
+  dplyr::group_by(id) %>%
+  dplyr::summarize(
+    INQ = sum(!is.na(inq)),
+    INQ_P = sum(!is.na(inq_pb)),
+    INQ_T = sum(!is.na(inq_tb)),
+    INQ = sum(!is.na(inq)),
+    BHS = sum(!is.na(bhs)),
+    BDI = sum(!is.na(bdi)),
+    SRC = sum(!is.na(srcs17)),
+    SSI = sum(!is.na(ssi)), 
+    RLS = sum(!is.na(rls)), 
+    bpaqa = sum(!is.na(bpaqa)), 
+    bpaqh = sum(!is.na(bpaqh)),
+    bpaqpa = sum(!is.na(bpaqpa)),
+    bpaqva = sum(!is.na(bpaqva)),
+    ATSPPH = sum(!is.na(atspph))))
+
+# Filter out participants with only one observation on SRC
+Coping_data_filtered <- Coping_data %>%
+  dplyr::filter(id %in% time_points_summary$id[time_points_summary$INQ > 1])
+
+# number of participants after excluding people with only 1 observation on INQ
+(unique_id_count <- Coping_data_filtered %>%
+  dplyr::summarize(unique_ids = n_distinct(id))) # 98
+
+# verify that min number of filled in data is >1
+(time_points_summary <- Coping_data_filtered %>%
+  group_by(id) %>%
+  dplyr::summarize(
+    INQ = sum(!is.na(inq)),
+    BHS = sum(!is.na(bhs)),
+    BDI = sum(!is.na(bdi)),
+    SRC = sum(!is.na(srcs17)),
+    SSI = sum(!is.na(ssi)), 
+    RLS = sum(!is.na(rls)),
+    bpaqa = sum(!is.na(bpaqa)), 
+    bpaqh = sum(!is.na(bpaqh)),
+    bpaqpa = sum(!is.na(bpaqpa)),
+    bpaqva = sum(!is.na(bpaqva)),
+    ATSPPH = sum(!is.na(atspph))))
+
+summary(time_points_summary$INQ)    
+summary(time_points_summary$SSI)    
+summary(time_points_summary$SRC)    
+summary(time_points_summary$BDI)   
+summary(time_points_summary$BHS)    
+summary(time_points_summary$RLS)    
+summary(time_points_summary$bpaqh)    
+summary(time_points_summary$bpaqpa)  
+summary(time_points_summary$bpaqpa)   
+summary(time_points_summary$bpaqva)   
+summary(time_points_summary$ATSPPH)
+```
+
+
+```{r Filter}
+# save dataset
+write.csv(Coping_data_filtered, 
+          file = paste0("Created_datasets/Secondary_coping_data_", 
+                        format(Sys.Date(), "%Y_%m_%d"), ".csv"), 
+          row.names = TRUE) # latest version 7/12
+```
+
+# Participant demographics and descriptives
+```{r Demographics}
+table(Coping_data_filtered$sex_demo)
+table(Coping_data_filtered$race_demo)
+table(Coping_data_filtered$degree_demo)
+table(Coping_data_filtered$employ_demo)
+table(Coping_data_filtered$marry_demo)
+table(Coping_data_filtered$marry_demo)
+table(Coping_data_filtered$treat_demo)
+table(Coping_data_filtered$support_demo)
+table(Coping_data_filtered$kids_demo)
+table(Coping_data_filtered$alone_demo)
+table(Coping_data_filtered$prior_demo)
+table(Coping_data_filtered$prison_demo)
+table(Coping_data_filtered$access_demo)
+summary(Coping_data_filtered$age_demo)
+sd(Coping_data_filtered$age_demo, na.rm = TRUE)
+
+table(Coping_data_filtered$q36_sitbi) # lifetime suicide attempt with intent to die; 0 = no, 1 = yes
+table(Coping_data_filtered$q40_sitbi) # lifetime suicide attempts number
+table(Coping_data_filtered$q41_sitbi) # Past-year suicide attempts number
+
+table(Coping_data_filtered$q14_sitbi) # lifetime suicide plan; 0 = no, 1 = yes
+table(Coping_data_filtered$q17_sitbi) # lifetime suicide plan number
+table(Coping_data_filtered$q48_sitbi) # Past-year suicide plan number
+
+table(Coping_data_filtered$q51_sitbi) # lifetime NSSI; 0 = no, 1 = yes
+```
+
+```{r Baseline measure descriptives}
+Coping_data_filtered_baseline <- filter(Coping_data_filtered, month == 0)
+summary(Coping_data_filtered_baseline$bdi)
+sd(Coping_data_filtered_baseline$bdi, na.rm = T)
+(sum(Coping_data_filtered_baseline$bdi > 28, na.rm = TRUE) / sum(!is.na(Coping_data_filtered_baseline$bdi))) * 100
+
+summary(Coping_data_filtered_baseline$SSI)
+sd(Coping_data_filtered_baseline$SSI, na.rm = T)
+(sum(Coping_data_filtered_baseline$SSI > 0, na.rm = TRUE) / sum(!is.na(Coping_data_filtered_baseline$SSI))) * 100
+
+summary(Coping_data_filtered_baseline$bhs)
+sd(Coping_data_filtered_baseline$bhs, na.rm = T)
+(sum(Coping_data_filtered_baseline$bhs > 14, na.rm = TRUE) / sum(!is.na(Coping_data_filtered_baseline$bhs))) * 100
+(sum(Coping_data_filtered_baseline$bhs > 8, na.rm = TRUE) / sum(!is.na(Coping_data_filtered_baseline$bhs))) * 100
+
+summary(Coping_data_filtered_baseline$rls)
+sd(Coping_data_filtered_baseline$rls, na.rm = T)
+```
+
+# Measure statistics
+```{r Measure descriptives}
+# across all waves: 
+var(Coping_data_filtered$srcs17, na.rm = T) 
+var(Coping_data_filtered$inq, na.rm = T) 
+var(Coping_data_filtered$ssi, na.rm = T) 
+var(Coping_data_filtered$bdi, na.rm = T) 
+var(Coping_data_filtered$bhs, na.rm = T) 
+var(Coping_data_filtered$rls, na.rm = T) 
+
+skewness(Coping_data_filtered$srcs17, na.rm = T) 
+skewness(Coping_data_filtered$inq, na.rm = T)
+skewness(Coping_data_filtered$ssi, na.rm = T) 
+skewness(Coping_data_filtered$bdi, na.rm = T) 
+skewness(Coping_data_filtered$bhs, na.rm = T) 
+skewness(Coping_data_filtered$rls, na.rm = T) 
+skewness(Coping_data_filtered$inq_tb, na.rm = T) 
+skewness(Coping_data_filtered$inq_pb, na.rm = T) 
+
+kurtosis(Coping_data_filtered$srcs17, na.rm = T) 
+kurtosis(Coping_data_filtered$inq, na.rm = T) 
+kurtosis(Coping_data_filtered$ssi, na.rm = T) 
+kurtosis(Coping_data_filtered$bdi, na.rm = T) 
+kurtosis(Coping_data_filtered$bhs, na.rm = T) 
+kurtosis(Coping_data_filtered$rls, na.rm = T) 
+kurtosis(Coping_data_filtered$inq_tb, na.rm = T) 7
+kurtosis(Coping_data_filtered$inq_pb, na.rm = T) 
+
+#### Measure reliability ####
+
+##### INQ #####
+INQ_items <- Coping_data_filtered %>%
+  dplyr::select(month, matches("^q\\d{2}_inq$"))
+
+INQ_items_timepoint_0 <- INQ_items %>%
+  dplyr::filter(month == 0) %>%
+  dplyr::select(-month)
+
+ltm::cronbach.alpha(INQ_items_timepoint_0, CI = TRUE, na.rm = TRUE)  # 0 = .88, 3 = .93, 6 = .92, 12 = .92
+psych::alpha(INQ_items_timepoint_0, check.keys = TRUE)
+
+INQ_PB_items <- Coping_data_filtered %>%
+  dplyr::select(month, matches("^q0[1-6]_inq$"))
+
+INQ_PB_items_timepoint_0 <- INQ_PB_items %>%
+  dplyr::filter(month == 12) %>%
+  dplyr::select(-month)
+
+ltm::cronbach.alpha(INQ_PB_items_timepoint_0, CI = TRUE, na.rm = TRUE)  # 0 = .92, 3 = .95, 6 = .95, 12 = .93
+
+INQ_TB_items <- Coping_data_filtered %>%
+  dplyr::select(month, matches("^q0[7-9]_inq$|^q1[0-5]_inq$"))
+head(INQ_TB_items)
+
+INQ_TB_items_timepoint_0 <- INQ_TB_items %>%
+  dplyr::filter(month == 12) %>%
+  dplyr::select(-month)
+
+ltm::cronbach.alpha(INQ_TB_items_timepoint_0, CI = TRUE, na.rm = TRUE)  # 0 = .80, 3 = .87, 6 = .87, 12 = .87
+
+##### SRC #####
+SRC_items <- Coping_data_filtered %>%
+  select(month, matches("^q\\d{2}_srcs$")) %>%
+  select(-matches("^q(02|07|15|21)_srcs$"))
+
+SRC_items_timepoint_0 <- SRC_items %>%
+  filter(month == 12) %>%
+  select(-month)
+
+ltm::cronbach.alpha(SRC_items_timepoint_0, CI = TRUE, na.rm = TRUE)  # 0 = .85, 3 = .92, 6 = .90, 12 = .89
+
+##### SSI #####
+SSI_items <- Coping_data_filtered %>%
+  select(month, matches("^q\\d{2}_ssi$")) %>%
+  select(-matches("^q(20|21)_ssi$"))
+
+SSI_items_timepoint_0 <- SSI_items %>%
+  filter(month == 12) %>%
+  select(-month)
+
+ltm::cronbach.alpha(SSI_items_timepoint_0, CI = TRUE, na.rm = TRUE)  # 0 = .87, 3 = .88, 6 = .92, 12 = .87
+
+##### BHS #####
+BHS_items <- Coping_data_filtered %>%
+  select(month, matches("^q\\d{2}_bhs$"))
+
+BHS_items_timepoint_0 <- BHS_items %>%
+  filter(month == 12) %>%
+  select(-month)
+
+ltm::cronbach.alpha(BHS_items_timepoint_0, CI = TRUE, na.rm = TRUE)   # 0 = .92, 3 = .94, 6 = .94, 12 = .93
+
+##### BDI #####
+BDI_items <- Coping_data_filtered %>%
+  select(month, matches("^q\\d{2}_bdi$"))
+
+BDI_items_timepoint_0 <- BDI_items %>%
+  filter(month == 6) %>%
+  select(-month)
+
+ltm::cronbach.alpha(BDI_items_timepoint_0, CI = TRUE, na.rm = TRUE)   # 0 = .92, 3 = .95, 6 = .95, 12 = .95
+
+##### RLI #####
+RLS_items <- Coping_data_filtered %>%
+  select(month, matches("^q\\d{2}_rli$"))
+
+RLS_items_timepoint_0 <- RLS_items %>%
+  filter(month == 12) %>%
+  select(-month)
+
+ltm::cronbach.alpha(RLS_items_timepoint_0, CI = TRUE, na.rm = TRUE)   # 0 = .96, 3 = .97, 6 = .98, 12 = .96
+
+##### MSI-BPD #####
+
+# NOTE: use full sample for variance
+BPD_items <- merged_plf %>%
+  dplyr::select(month, matches("^q0[0-9]_msibpd$|^q1[0-5]_msibpd$"))
+head(BPD_items)
+
+BPD_items_timepoint_0 <- BPD_items %>%
+  dplyr::filter(month == 0) %>%
+  dplyr::select(-month)
+
+ltm::cronbach.alpha(BPD_items_timepoint_0, CI = TRUE, na.rm = TRUE)  # 0 = .80, 3 = .87, 6 = .87, 12 = .87
+
+#### Patterns of missingness ####
+missingness <- Coping_data_filtered[, c("ssi", "srcse", "srcsi", "srcs17", "rls", "inq", "bhs", "bdi")]
+mcar_test(missingness)
+```

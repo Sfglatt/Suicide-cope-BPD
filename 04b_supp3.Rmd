@@ -1,0 +1,901 @@
+---
+title: "04b_supp3"
+output: github_document
+keep_html: TRUE
+---
+
+```{r Packages}
+if (!require("bigutilsr")) {install.packages("bigutilsr"); require("bigutilsr")}
+if (!require("dbscan")) {install.packages("dbscan"); require("dbscan")}
+if (!require("dplyr")) {install.packages("dplyr"); require("dplyr")}
+if (!require("EMAtools")) {install.packages("EMAtools"); require("EMAtools")}
+if (!require("ggplot2")) {install.packages("ggplot2"); require("ggplot2")}
+if (!require("ggstatsplot")) {install.packages("ggstatsplot"); require("ggstatsplot")}
+if (!require("ICS")) {install.packages("ICS"); require("ICS")}
+if (!require("ICSOutlier")) {install.packages("ICSOutlier"); require("ICSOutlier")}
+if (!require("insight")) {install.packages("insight"); require("insight")}
+if (!require("lme4")) {install.packages("lme4"); require("lme4")}
+if (!require("lmerTest")) {install.packages("lmerTest"); require("lmerTest")}
+if (!require("performance")) {install.packages("performance"); require("performance")}
+if (!require("psych")) {install.packages("psych"); require("psych")}
+if (!require("pwr")) {install.packages("pwr"); require("pwr")}
+if (!require("sjPlot")) {install.packages("sjPlot"); require("sjPlot")}
+devtools::install_github("sjPlot/sjstats")
+if (!require("sjstats")) {install.packages("sjstats"); require("sjstats")}
+if (!require("tidyverse")) {install.packages("tidyverse"); require("tidyverse")}
+```
+
+# NOTE: this script assumed 03a functions have been run.
+
+```{r Data}
+Coping_data_filtered <- read.csv("Created_datasets/Secondary_coping_data_2024_07_12.csv") 
+```
+
+# Supplement 3a
+```{r}
+plf_four_wave <- rmcorr_mat(id, 
+                             variables = c("srcsi", "srcse",
+                                           "inq_tb", "inq_pb", "bhs", "bdi", "ssi", "rls"
+                                           ), 
+                             Coping_data_filtered, 
+                             CI.level = 0.95)
+
+# extract results
+(table_rm_all <- plf_four_wave$summary)
+
+# save table for main and supplementary results
+write.csv(table_rm_all, "04b_Output/table_rm.csv")
+
+# look at p vals correcting for multiple comparisons
+p.vals <- plf_four_wave$summary$p.vals
+
+(p.vals.bonferroni <- p.adjust(p.vals, 
+                              method = "bonferroni",
+                              n = length(p.vals)))
+```
+
+# Supplement 3b
+```{r MLM data prep}
+# participant-mean scores for External coping
+Coping_data_filtered$Ext_cope_pmeans <- pmean(Coping_data_filtered$id,
+                                              Coping_data_filtered$srcse)
+
+# person-centered means for External coping
+Coping_data_filtered$Ext_cope_pcent <- pcenter(Coping_data_filtered$id,
+                                               Coping_data_filtered$srcse)
+
+# participant-mean scores for Internal coping
+Coping_data_filtered$Int_cope_pmeans <- pmean(Coping_data_filtered$id,
+                                              Coping_data_filtered$srcsi)
+
+# person-centered means for Internal coping
+Coping_data_filtered$Int_cope_pcent <- pcenter(Coping_data_filtered$id,
+                                               Coping_data_filtered$srcsi)
+
+# Intercept only models
+
+uncon_ext_coping <- lmer(srcse ~ 1 + (1 | id), data = Coping_data_filtered)
+tab_model(uncon_ext_coping) # ICC = .44
+
+uncon_int_coping <- lmer(srcsi ~ 1 + (1 | id), data = Coping_data_filtered)
+tab_model(uncon_int_coping,  p.val = "kr") # ICC = .45
+```
+
+```{r Supplement external coping models}
+##### BDI #####
+
+model_Ext_cp_to_BDI <- lmer(
+  bdi ~ Ext_cope_pmeans 
+  + Ext_cope_pcent 
+  + month 
+  # + ssi
+  + (1 | id),
+  data = Coping_data_filtered)
+
+(co_5 <- performance::check_outliers(model_Ext_cp_to_BDI, method = "all")) # 2 outliers detected: cases 118, 201.
+outlier_indices <- which(co_5)
+insight::get_data(model_Ext_cp_to_BDI)[outlier_indices, ] # BX-162 month 6, BX-096-0
+
+Coping_data_filtered_co_5 <- Coping_data_filtered[!(
+  (Coping_data_filtered$id == "BX-162" & Coping_data_filtered$month == 6) |
+  (Coping_data_filtered$id == "BX-096" & Coping_data_filtered$month == 0)
+  ), ]
+
+model_Ext_cp_to_BDI <- lmer(
+  bdi ~ Ext_cope_pmeans 
+  + Ext_cope_pcent 
+  + month 
+  # + ssi
+  + (1 | id),
+  data = Coping_data_filtered_co_5)
+
+(co_5 <- performance::check_outliers(model_Ext_cp_to_BDI, method = "all")) # No outliers detected
+
+##### INQ #####
+
+model_Ext_cp_to_INQ <- lmer(
+  inq ~ Ext_cope_pmeans 
+  + Ext_cope_pcent 
+  + month 
+  # + ssi
+  + (1 | id),
+  data = Coping_data_filtered)
+
+(co_6 <- performance::check_outliers(model_Ext_cp_to_INQ, method = "all")) # 2 outliers detected: cases 118, 201.
+outlier_indices <- which(co_6)
+insight::get_data(model_Ext_cp_to_INQ)[outlier_indices, ] # BX-096 month 0, BX-162 month 6
+
+# Remove outliers
+Coping_data_filtered_co_6 <- Coping_data_filtered[!(
+  (Coping_data_filtered$id == "BX-096" & Coping_data_filtered$month == 0) |
+  (Coping_data_filtered$id == "BX-162" & Coping_data_filtered$month == 6)
+), ]
+
+model_Ext_cp_to_INQ <- lmer(
+  inq ~ Ext_cope_pmeans 
+  + Ext_cope_pcent 
+  + month 
+  # + ssi
+  + (1 | id),
+  data = Coping_data_filtered_co_6)
+
+(co_6 <- performance::check_outliers(model_Ext_cp_to_INQ, method = "all")) # No outliers detected
+
+###### TB ######
+
+model_Ext_cp_to_TB <- lmer(
+  inq_tb ~ Ext_cope_pmeans 
+  + Ext_cope_pcent 
+  + month 
+  # + ssi
+  + (1 | id),
+  data = Coping_data_filtered)
+
+(co_6 <- performance::check_outliers(model_Ext_cp_to_TB, method = "all")) # 1 outlier detected
+outlier_indices <- which(co_6)
+insight::get_data(model_Ext_cp_to_TB)[outlier_indices, ] # BX-096 month 0
+
+# Remove outliers
+Coping_data_filtered_co_6 <- Coping_data_filtered[!(Coping_data_filtered$id == "BX-096" & Coping_data_filtered$month == 0),]
+
+model_Ext_cp_to_TB <- lmer(
+  inq_tb ~ Ext_cope_pmeans 
+  + Ext_cope_pcent 
+  + month 
+  # + ssi
+  + (1 | id),
+  data = Coping_data_filtered_co_6)
+
+(co_6 <- performance::check_outliers(model_Ext_cp_to_TB, method = "all")) # No outliers detected
+
+###### PB ######
+
+model_Ext_cp_to_PB <- lmer(
+  inq_pb ~ Ext_cope_pmeans 
+  + Ext_cope_pcent 
+  + month 
+  # + ssi
+  + (1 | id),
+  data = Coping_data_filtered)
+
+(co_6 <- performance::check_outliers(model_Ext_cp_to_PB, method = "all")) # 1 outlier detected
+outlier_indices <- which(co_6)
+insight::get_data(model_Ext_cp_to_PB)[outlier_indices, ] # BX-096 month 0, # BX-162 month 6
+
+Coping_data_filtered_co_6 <- Coping_data_filtered[!(
+  (Coping_data_filtered$id == "BX-162" & Coping_data_filtered$month == 6) |
+  (Coping_data_filtered$id == "BX-096" & Coping_data_filtered$month == 0)
+  ), ]
+
+model_Ext_cp_to_PB <- lmer(
+  inq_pb ~ Ext_cope_pmeans 
+  + Ext_cope_pcent 
+  + month 
+  # + ssi
+  + (1 | id),
+  data = Coping_data_filtered_co_6)
+
+(co_6 <- performance::check_outliers(model_Ext_cp_to_PB, method = "all")) # No outliers detected
+outlier_indices <- which(co_6)
+insight::get_data(model_Ext_cp_to_PB)[outlier_indices, ] # BX-057 month 0
+
+Coping_data_filtered_co_7 <- Coping_data_filtered_co_6[!(Coping_data_filtered_co_6$id == "BX-057" 
+                                                         & Coping_data_filtered_co_6$month == 0), ]
+
+model_Ext_cp_to_PB <- lmer(
+  inq_pb ~ Ext_cope_pmeans 
+  + Ext_cope_pcent 
+  + month 
+  # + ssi
+  + (1 | id),
+  data = Coping_data_filtered_co_7)
+
+(co_7 <- performance::check_outliers(model_Ext_cp_to_PB, method = "all")) # No outliers detected
+
+##### BHS ####
+
+model_Ext_cp_to_BHS <- lmer(
+  bhs ~ Ext_cope_pmeans 
+  + Ext_cope_pcent 
+  + month 
+  # + ssi
+  + (1 | id),
+  data = Coping_data_filtered)
+
+(co_7 <- performance::check_outliers(model_Ext_cp_to_BHS, method = "all")) # 1 outlier detected: case 203.
+outlier_indices <- which(co_7)
+insight::get_data(model_Ext_cp_to_BHS)[outlier_indices, ] # BX-162 month 6 
+
+Coping_data_filtered_co_7 <- Coping_data_filtered[!(Coping_data_filtered$id == "BX-162" 
+                                                    & Coping_data_filtered$month == 6), ]
+
+model_Ext_cp_to_BHS <- lmer(
+  bhs ~ Ext_cope_pmeans 
+  + Ext_cope_pcent 
+  + month 
+  # + ssi
+  + (1 | id),
+  data = Coping_data_filtered_co_7)
+
+(co_7 <- performance::check_outliers(model_Ext_cp_to_BHS, method = "all")) # No outliers detected
+
+##### RLS #####
+
+model_Ext_cp_to_RLS <- lmer(
+  rls ~ Ext_cope_pmeans 
+  + Ext_cope_pcent 
+  + month 
+  # + ssi
+  + (1 | id),
+  data = Coping_data_filtered)
+
+(co_8 <- performance::check_outliers(model_Ext_cp_to_RLS, method = "all")) # 1 outlier detected: case 118.
+outlier_indices <- which(co_8)
+insight::get_data(model_Ext_cp_to_RLS)[outlier_indices, ] # BX-096 month 0
+
+# Remove outlier 
+Coping_data_filtered_co_8 <- Coping_data_filtered[!(Coping_data_filtered$id == "BX-096" 
+                                               & Coping_data_filtered$month == 0), ]
+  
+model_Ext_cp_to_RLS <- lmer(
+  rls ~ Ext_cope_pmeans 
+  + Ext_cope_pcent 
+  + month 
+  # + ssi
+  + (1 | id),
+  data = Coping_data_filtered_co_8)
+(co_8 <- performance::check_outliers(model_Ext_cp_to_RLS, method = "all")) # No outliers detected
+
+#### Cohen's d (--power) ####
+
+lme.dscore(model_Ext_cp_to_RLS, data = Coping_data_filtered, type = "lme4") # .5 with and without SI
+lme.dscore(model_Ext_cp_to_BDI, data = Coping_data_filtered, type = "lme4") # .5 with and without SI
+lme.dscore(model_Ext_cp_to_BHS, data = Coping_data_filtered, type = "lme4") # .5 with and without SI
+lme.dscore(model_Ext_cp_to_PB, data = Coping_data_filtered, type = "lme4") # .5 without SI
+lme.dscore(model_Ext_cp_to_TB , data = Coping_data_filtered, type = "lme4") # .5 without SI
+```
+
+```{r Supplement internal coping models}
+##### BDI #####
+
+model_Int_cp_to_BDI <- lmer(
+  bdi ~ Int_cope_pmeans 
+  + Int_cope_pcent 
+  + month 
+  # + ssi
+  + (1 | id),
+  data = Coping_data_filtered)
+
+(co_9 <- performance::check_outliers(model_Int_cp_to_BDI, method = "all")) # no outliers detected
+
+##### INQ #####
+
+model_Int_cp_to_INQ <- lmer(
+  inq ~ Int_cope_pmeans 
+  + Int_cope_pcent 
+  + month 
+  # + ssi
+  + (1 | id),
+  data = Coping_data_filtered)
+
+(co_10 <- performance::check_outliers(model_Int_cp_to_INQ, method = "all")) # No outliers detected
+
+###### TB ######
+
+model_Int_cp_to_TB <- lmer(
+  inq_tb ~ Int_cope_pmeans 
+  + Int_cope_pcent 
+  + month 
+  # + ssi
+  + (1 | id),
+  data = Coping_data_filtered)
+
+(co_10 <- performance::check_outliers(model_Int_cp_to_TB, method = "all")) # No outliers detected
+
+###### PB ######
+
+model_Int_cp_to_PB <- lmer(
+  inq_pb ~ Int_cope_pmeans 
+  + Int_cope_pcent 
+  + month 
+  # + ssi
+  + (1 | id),
+  data = Coping_data_filtered)
+
+(co_10 <- performance::check_outliers(model_Int_cp_to_PB, method = "all")) # 1 outlier detected: case 50
+outlier_indices <- which(co_10)
+insight::get_data(model_Int_cp_to_PB)[outlier_indices, ] # BX-034 month 0
+
+# Remove outliers
+Coping_data_filtered_co_10 <- Coping_data_filtered[!(Coping_data_filtered$id == "BX-034" 
+                                                     & Coping_data_filtered$month == 0),]
+
+model_Int_cp_to_PB <- lmer(
+  inq_pb ~ Int_cope_pmeans 
+  + Int_cope_pcent 
+  + month 
+  # + ssi
+  + (1 | id),
+  data = Coping_data_filtered_co_10)
+
+(co_10 <- performance::check_outliers(model_Int_cp_to_PB, method = "all")) # 1 outlier detected: case 52
+outlier_indices <- which(co_10)
+insight::get_data(model_Int_cp_to_PB)[outlier_indices, ] # BX-034 month 12
+
+Coping_data_filtered_co_10 <- Coping_data_filtered_co_10[!(Coping_data_filtered_co_10$id == "BX-034" 
+                                                           & Coping_data_filtered_co_10$month == 12),]
+
+model_Int_cp_to_PB <- lmer(
+  inq_pb ~ Int_cope_pmeans 
+  + Int_cope_pcent 
+  + month 
+  # + ssi
+  + (1 | id),
+  data = Coping_data_filtered_co_10)
+
+(co_10 <- performance::check_outliers(model_Int_cp_to_PB, method = "all")) # 1 outlier detected: case 52
+outlier_indices <- which(co_10)
+insight::get_data(model_Int_cp_to_PB)[outlier_indices, ] # BX-035 month 0
+
+Coping_data_filtered_co_10 <- Coping_data_filtered_co_10[!(Coping_data_filtered_co_10$id == "BX-035" 
+                                                           & Coping_data_filtered_co_10$month == 0),]
+
+model_Int_cp_to_PB <- lmer(
+  inq_pb ~ Int_cope_pmeans 
+  + Int_cope_pcent 
+  + month 
+  # + ssi
+  + (1 | id),
+  data = Coping_data_filtered_co_10)
+
+(co_10 <- performance::check_outliers(model_Int_cp_to_PB, method = "all")) # 1 outlier detected: case 52
+outlier_indices <- which(co_10)
+insight::get_data(model_Int_cp_to_PB)[outlier_indices, ] # finally none.
+
+##### BHS ####
+
+model_Int_cp_to_BHS <- lmer(
+  bhs ~ Int_cope_pmeans 
+  + Int_cope_pcent 
+  + month 
+  # + ssi
+  + (1 | id),
+  data = Coping_data_filtered)
+
+(co_11 <- performance::check_outliers(model_Int_cp_to_BHS, method = "all")) # 1 outlier detected: case 55.
+outlier_indices <- which(co_11)
+insight::get_data(model_Int_cp_to_BHS)[outlier_indices, ] # BX-035 month 3
+
+Coping_data_filtered_co_11 <- Coping_data_filtered[!(Coping_data_filtered$id == "BX-035" 
+                                                     & Coping_data_filtered$month == 3), ]
+
+model_Int_cp_to_BHS <- lmer(
+  bhs ~ Int_cope_pmeans 
+  + Int_cope_pcent 
+  + month 
+  # + ssi
+  + (1 | id),
+  data = Coping_data_filtered_co_11)
+
+(co_11 <- performance::check_outliers(model_Int_cp_to_BHS, method = "all")) # No outliers detected.
+
+##### RLS #####
+
+model_Int_cp_to_RLS <- lmer(
+  rls ~ Int_cope_pmeans 
+  + Int_cope_pcent 
+  + month 
+  # + ssi
+  + (1 | id),
+  data = Coping_data_filtered)
+
+(co_12 <- performance::check_outliers(model_Int_cp_to_RLS, method = "all")) # No outliers detected
+outlier_indices <- which(co_12)
+insight::get_data(model_Int_cp_to_RLS)[outlier_indices, ] # BX-035 month 3
+
+Coping_data_filtered_co_12 <- Coping_data_filtered[!(Coping_data_filtered$id == "BX-035" 
+                                                     & Coping_data_filtered$month == 3), ]
+
+model_Int_cp_to_RLS <- lmer(
+  rls ~ Int_cope_pmeans 
+  + Int_cope_pcent 
+  + month 
+  # + ssi
+  + (1 | id),
+  data = Coping_data_filtered_co_12)
+
+(co_12 <- performance::check_outliers(model_Int_cp_to_RLS, method = "all")) # No outliers detected
+
+#### Cohen's d (--power) ####
+
+lme.dscore(model_Int_cp_to_RLS, data = Coping_data_filtered, type = "lme4") 
+lme.dscore(model_Int_cp_to_BDI, data = Coping_data_filtered, type = "lme4") 
+lme.dscore(model_Int_cp_to_BHS, data = Coping_data_filtered, type = "lme4") 
+lme.dscore(model_Int_cp_to_PB, data = Coping_data_filtered, type = "lme4")  
+lme.dscore(model_Int_cp_to_TB , data = Coping_data_filtered, type = "lme4") 
+
+#### Supplement internal and external coping model tables ####
+
+tab_model(model_Int_cp_to_PB, model_Ext_cp_to_PB,
+          show.se = FALSE, show.std = TRUE, show.stat = FALSE,  p.val = "kr", show.df = FALSE, p.style = "stars")
+
+tab_model(model_Int_cp_to_TB, model_Ext_cp_to_TB,
+          show.se = FALSE, show.std = TRUE, show.stat = FALSE,  p.val = "kr", show.df = FALSE, p.style = "stars")
+
+tab_model(model_Int_cp_to_BDI, model_Ext_cp_to_BDI,
+          show.se = FALSE, show.std = TRUE, show.stat = FALSE,  p.val = "kr", show.df = FALSE, p.style = "stars")
+
+tab_model(model_Int_cp_to_BHS, model_Ext_cp_to_BHS,
+          show.se = FALSE, show.std = TRUE, show.stat = FALSE,  p.val = "kr", show.df = FALSE, p.style = "stars")
+
+tab_model(model_Int_cp_to_RLS, model_Ext_cp_to_RLS,
+          show.se = FALSE, show.std = TRUE, show.stat = FALSE,  p.val = "kr", show.df = FALSE, p.style = "stars")
+
+tab_model(model_Int_cp_to_PB, model_Ext_cp_to_PB,
+          show.se = FALSE, show.std = TRUE, show.stat = FALSE,  p.val = "kr", show.df = FALSE, p.style = "stars")
+
+tab_model(model_Int_cp_to_TB, model_Ext_cp_to_TB,
+          show.se = FALSE, show.std = TRUE, show.stat = FALSE,  p.val = "kr", show.df = FALSE, p.style = "stars")
+```
+
+# supplement 3c
+```{r Supplement external coping models with SI}
+##### BDI #####
+
+model_SI_Ext_cp_to_BDI <- lmer(
+  bdi ~ Ext_cope_pmeans 
+  + Ext_cope_pcent 
+  + month 
+  + ssi
+  + (1 | id),
+  data = Coping_data_filtered)
+
+(co_5 <- performance::check_outliers(model_SI_Ext_cp_to_BDI, method = "all")) # 1 outlier detected: case 200
+outlier_indices <- which(co_5)
+insight::get_data(model_SI_Ext_cp_to_BDI)[outlier_indices, ] # BX-162 month 6
+
+# Remove outlier 
+Coping_data_filtered_co_5 <- Coping_data_filtered[!(Coping_data_filtered$id == "BX-162" 
+                                               & Coping_data_filtered$month == 6), ]
+
+model_SI_Ext_cp_to_BDI <- lmer(
+  bdi ~ Ext_cope_pmeans 
+  + Ext_cope_pcent 
+  + month 
+  + ssi
+  + (1 | id),
+  data = Coping_data_filtered_co_5)
+
+(co_5 <- performance::check_outliers(model_SI_Ext_cp_to_BDI, method = "all")) # 1 outlier detected: case 54
+outlier_indices <- which(co_5)
+insight::get_data(model_SI_Ext_cp_to_BDI)[outlier_indices, ] # BX-035 month 0
+
+# Remove outlier 
+Coping_data_filtered_co_5 <- Coping_data_filtered_co_5[!(Coping_data_filtered_co_5$id == "BX-035" 
+                                                         & Coping_data_filtered_co_5$month == 0), ]
+
+model_SI_Ext_cp_to_BDI <- lmer(
+  bdi ~ Ext_cope_pmeans 
+  + Ext_cope_pcent 
+  + month 
+  + ssi
+  + (1 | id),
+  data = Coping_data_filtered_co_5)
+
+(co_1 <- performance::check_outliers(model_SI_Ext_cp_to_BDI, method = "all")) # OK: No outliers detected.
+
+##### INQ #####
+
+model_SI_Ext_cp_to_INQ <- lmer(
+  inq ~ Ext_cope_pmeans 
+  + Ext_cope_pcent 
+  + month 
+  + ssi
+  + (1 | id),
+  data = Coping_data_filtered)
+
+(co_6 <- performance::check_outliers(model_SI_Ext_cp_to_INQ, method = "all")) # 2 outliers detected: cases 117, 200.
+outlier_indices <- which(co_6)
+insight::get_data(model_SI_Ext_cp_to_INQ)[outlier_indices, ] # BX-096 month 0, BX-162 month 6
+
+# Remove outliers
+Coping_data_filtered_co_6 <- Coping_data_filtered[!(
+  (Coping_data_filtered$id == "BX-096" & Coping_data_filtered$month == 0) |
+  (Coping_data_filtered$id == "BX-162" & Coping_data_filtered$month == 6)
+), ]
+
+model_SI_Ext_cp_to_INQ <- lmer(
+  inq ~ Ext_cope_pmeans 
+  + Ext_cope_pcent 
+  + month 
+  + ssi
+  + (1 | id),
+  data = Coping_data_filtered_co_6)
+
+(co_6 <- performance::check_outliers(model_SI_Ext_cp_to_INQ, method = "all")) # No outliers detected
+
+###### PB ######
+
+model_SI_Ext_cp_to_PB <- lmer(
+  inq_pb ~ Ext_cope_pmeans 
+  + Ext_cope_pcent 
+  + month 
+  + ssi
+  + (1 | id),
+  data = Coping_data_filtered)
+
+(co_6 <- performance::check_outliers(model_SI_Ext_cp_to_PB, method = "all")) # 2 outliers detected: cases 54, 200.
+outlier_indices <- which(co_6)
+insight::get_data(model_SI_Ext_cp_to_PB)[outlier_indices, ] # BX-035 month 0, BX-162 month 6
+
+# Remove outliers
+Coping_data_filtered_co_6 <- Coping_data_filtered[!(
+  (Coping_data_filtered$id == "BX-035" & Coping_data_filtered$month == 0) |
+  (Coping_data_filtered$id == "BX-162" & Coping_data_filtered$month == 6)
+), ]
+
+model_SI_Ext_cp_to_PB <- lmer(
+  inq_pb ~ Ext_cope_pmeans 
+  + Ext_cope_pcent 
+  + month 
+  + ssi
+  + (1 | id),
+  data = Coping_data_filtered_co_6)
+
+(co_6 <- performance::check_outliers(model_SI_Ext_cp_to_PB, method = "all")) # No outliers detected
+
+###### TB ######
+
+model_SI_Ext_cp_to_TB <- lmer(
+  inq_tb ~ Ext_cope_pmeans 
+  + Ext_cope_pcent 
+  + month 
+  + ssi
+  + (1 | id),
+  data = Coping_data_filtered)
+
+(co_6 <- performance::check_outliers(model_SI_Ext_cp_to_TB, method = "all")) # 2 outliers detected: cases 117, 200.
+outlier_indices <- which(co_6)
+insight::get_data(model_SI_Ext_cp_to_TB)[outlier_indices, ] # BX-096 month 0, BX-162 month 6
+
+# Remove outliers
+Coping_data_filtered_co_6 <- Coping_data_filtered[!(
+  (Coping_data_filtered$id == "BX-096" & Coping_data_filtered$month == 0) |
+  (Coping_data_filtered$id == "BX-162" & Coping_data_filtered$month == 6)
+), ]
+
+model_SI_Ext_cp_to_TB <- lmer(
+  inq_tb ~ Ext_cope_pmeans 
+  + Ext_cope_pcent 
+  + month 
+  + ssi
+  + (1 | id),
+  data = Coping_data_filtered_co_6)
+
+(co_6 <- performance::check_outliers(model_SI_Ext_cp_to_TB, method = "all")) # No outliers detected
+
+##### BHS ####
+
+model_SI_Ext_cp_to_BHS <- lmer(
+  bhs ~ Ext_cope_pmeans 
+  + Ext_cope_pcent 
+  + month 
+  + ssi
+  + (1 | id),
+  data = Coping_data_filtered)
+
+(co_7 <- performance::check_outliers(model_SI_Ext_cp_to_BHS, method = "all")) # 2 outliers detected: cases 26, 54.
+outlier_indices <- which(co_7)
+insight::get_data(model_SI_Ext_cp_to_BHS)[outlier_indices, ] # BX-162 month 6 and BX-014 month 6
+
+Coping_data_filtered_co_7 <- Coping_data_filtered[!(
+  (Coping_data_filtered$id == "BX-162" & Coping_data_filtered$month == 6) |
+  (Coping_data_filtered$id == "BX-014" & Coping_data_filtered$month == 6)
+), ]
+
+model_SI_Ext_cp_to_BHS <- lmer(
+  bhs ~ Ext_cope_pmeans 
+  + Ext_cope_pcent 
+  + month 
+  + ssi
+  + (1 | id),
+  data = Coping_data_filtered_co_7)
+
+(co_7 <- performance::check_outliers(model_SI_Ext_cp_to_BHS, method = "all")) # No outliers detected.
+outlier_indices <- which(co_7)
+insight::get_data(model_SI_Ext_cp_to_BHS)[outlier_indices, ] # BX-035 month 0 and BX-057 month 0
+
+Coping_data_filtered_co_7 <- Coping_data_filtered_co_7[!(
+  (Coping_data_filtered_co_7$id == "BX-035" & Coping_data_filtered_co_7$month == 0) |
+  (Coping_data_filtered_co_7$id == "BX-057" & Coping_data_filtered_co_7$month == 0)
+), ]
+
+model_SI_Ext_cp_to_BHS <- lmer(
+  bhs ~ Ext_cope_pmeans 
+  + Ext_cope_pcent 
+  + month 
+  + ssi
+  + (1 | id),
+  data = Coping_data_filtered_co_7)
+
+(co_7 <- performance::check_outliers(model_SI_Ext_cp_to_BHS, method = "all")) # No outliers detected
+
+##### RLS #####
+
+model_SI_Ext_cp_to_RLS <- lmer(
+  rls ~ Ext_cope_pmeans 
+  + Ext_cope_pcent 
+  + month 
+  + ssi
+  + (1 | id),
+  data = Coping_data_filtered)
+
+(co_8 <- performance::check_outliers(model_SI_Ext_cp_to_RLS, method = "all")) # 1 outlier detected: case 197
+outlier_indices <- which(co_8)
+insight::get_data(model_SI_Ext_cp_to_RLS)[outlier_indices, ] # BX-162 month 6
+
+# Remove outlier 
+Coping_data_filtered_co_8 <- Coping_data_filtered[!(Coping_data_filtered$id == "BX-162" 
+                                               & Coping_data_filtered$month == 6), ]
+  
+model_SI_Ext_cp_to_RLS <- lmer(
+  rls ~ Ext_cope_pmeans 
+  + Ext_cope_pcent 
+  + month 
+  + ssi
+  + (1 | id),
+  data = Coping_data_filtered_co_8)
+(co_8 <- performance::check_outliers(model_SI_Ext_cp_to_RLS, method = "all")) # No outliers detected
+
+#### Cohen's d (--power) ####
+
+lme.dscore(model_SI_Ext_cp_to_RLS, data = Coping_data_filtered, type = "lme4") # .5 without SI
+lme.dscore(model_SI_Ext_cp_to_BDI, data = Coping_data_filtered, type = "lme4") # .5 without SI
+lme.dscore(model_SI_Ext_cp_to_BHS, data = Coping_data_filtered, type = "lme4") # .5 without SI
+lme.dscore(model_SI_Ext_cp_to_INQ, data = Coping_data_filtered, type = "lme4") # .5 without SI
+lme.dscore(model_SI_Ext_cp_to_PB, data = Coping_data_filtered, type = "lme4") # UNDER .5 with SI
+lme.dscore(model_SI_Ext_cp_to_TB , data = Coping_data_filtered, type = "lme4") # .5 without SI
+```
+
+```{r Supplement internal coping models with SI}
+##### BDI #####
+
+model_SI_Int_cp_to_BDI <- lmer(
+  bdi ~ Int_cope_pmeans 
+  + Int_cope_pcent 
+  + month 
+  + ssi
+  + (1 | id),
+  data = Coping_data_filtered)
+
+(co_9 <- performance::check_outliers(model_SI_Int_cp_to_BDI, method = "all")) # 1 outlier detected: case 200
+outlier_indices <- which(co_9)
+insight::get_data(model_SI_Int_cp_to_BDI)[outlier_indices, ] # BX-035 month 0
+
+# Remove outlier 
+Coping_data_filtered_co_9 <- Coping_data_filtered[!(Coping_data_filtered$id == "BX-035" 
+                                               & Coping_data_filtered$month == 0), ]
+
+model_SI_Int_cp_to_BDI <- lmer(
+  bdi ~ Int_cope_pmeans 
+  + Int_cope_pcent 
+  + month 
+  + ssi
+  + (1 | id),
+  data = Coping_data_filtered_co_9)
+
+(co_9 <- performance::check_outliers(model_SI_Int_cp_to_BDI, method = "all")) # No outliers detected
+
+##### INQ #####
+
+model_SI_Int_cp_to_INQ <- lmer(
+  inq ~ Int_cope_pmeans 
+  + Int_cope_pcent 
+  + month 
+  + ssi
+  + (1 | id),
+  data = Coping_data_filtered)
+
+(co_10 <- performance::check_outliers(model_SI_Int_cp_to_INQ, method = "all")) # 1 outlier detected: case 54.
+outlier_indices <- which(co_10)
+insight::get_data(model_SI_Int_cp_to_INQ)[outlier_indices, ] # BX-035 month 0
+
+# Remove outlier 
+Coping_data_filtered_co_10 <- Coping_data_filtered[!(Coping_data_filtered$id == "BX-035" 
+                                                     & Coping_data_filtered$month == 0), ]
+
+model_SI_Int_cp_to_INQ <- lmer(
+  inq ~ Int_cope_pmeans 
+  + Int_cope_pcent 
+  + month 
+  + ssi
+  + (1 | id),
+  data = Coping_data_filtered_co_10)
+
+(co_10 <- performance::check_outliers(model_SI_Int_cp_to_INQ, method = "all")) # No outliers detected
+
+###### PB ######
+
+model_SI_Int_cp_to_PB <- lmer(
+  inq_pb ~ Int_cope_pmeans 
+  + Int_cope_pcent 
+  + month 
+  + ssi
+  + (1 | id),
+  data = Coping_data_filtered)
+
+(co_10 <- performance::check_outliers(model_SI_Int_cp_to_PB, method = "all")) # 2 outliers detected: cases 50, 54.
+outlier_indices <- which(co_10)
+insight::get_data(model_SI_Int_cp_to_PB)[outlier_indices, ] # BX-034 month 0, BX-035 month 0
+
+Coping_data_filtered_co_10 <- Coping_data_filtered_co_7[!(
+  (Coping_data_filtered_co_7$id == "BX-035" & Coping_data_filtered_co_7$month == 0) |
+  (Coping_data_filtered_co_7$id == "BX-034" & Coping_data_filtered_co_7$month == 0)
+), ]
+
+model_SI_Int_cp_to_PB <- lmer(
+  inq_pb ~ Int_cope_pmeans 
+  + Int_cope_pcent 
+  + month 
+  + ssi
+  + (1 | id),
+  data = Coping_data_filtered_co_10)
+
+(co_10 <- performance::check_outliers(model_SI_Int_cp_to_PB, method = "all")) # No outliers detected
+
+###### TB ######
+
+model_SI_Int_cp_to_TB <- lmer(
+  inq_tb ~ Int_cope_pmeans 
+  + Int_cope_pcent 
+  + month 
+  + ssi
+  + (1 | id),
+  data = Coping_data_filtered)
+
+(co_10 <- performance::check_outliers(model_SI_Int_cp_to_TB, method = "all")) # no outliers
+
+##### BHS ####
+
+model_SI_Int_cp_to_BHS <- lmer(
+  bhs ~ Int_cope_pmeans 
+  + Int_cope_pcent 
+  + month 
+  + ssi
+  + (1 | id),
+  data = Coping_data_filtered)
+
+(co_11 <- performance::check_outliers(model_SI_Int_cp_to_BHS, method = "all")) # 3 outliers detected: cases 26, 54, 55
+outlier_indices <- which(co_11)
+insight::get_data(model_SI_Int_cp_to_BHS)[outlier_indices, ] # BX-014 month 6, BX-035 month 0, BX-035 month 3
+
+Coping_data_filtered_co_11 <- Coping_data_filtered[!(
+  (Coping_data_filtered$id == "BX-014" & Coping_data_filtered$month == 6) |
+  (Coping_data_filtered$id == "BX-035" & Coping_data_filtered$month == 0) |
+  (Coping_data_filtered$id == "BX-035" & Coping_data_filtered$month == 3) 
+), ]
+
+model_SI_Int_cp_to_BHS <- lmer(
+  bhs ~ Int_cope_pmeans 
+  + Int_cope_pcent 
+  + month 
+  + ssi
+  + (1 | id),
+  data = Coping_data_filtered_co_11)
+
+(co_11 <- performance::check_outliers(model_SI_Int_cp_to_BHS, method = "all")) # No outliers detected.
+
+##### RLS #####
+
+model_SI_Int_cp_to_RLS <- lmer(
+  rls ~ Int_cope_pmeans 
+  + Int_cope_pcent 
+  + month 
+  + ssi
+  + (1 | id),
+  data = Coping_data_filtered)
+
+(co_12 <- performance::check_outliers(model_SI_Int_cp_to_RLS, method = "all")) # No outliers detected
+
+#### Supplement internal and external coping with SI model tables ####
+tab_model(model_SI_Int_cp_to_PB, model_SI_Ext_cp_to_PB,
+          show.se = FALSE, show.std = TRUE, show.stat = FALSE,  p.val = "kr", show.df = FALSE, p.style = "stars")
+
+tab_model(model_SI_Int_cp_to_TB, model_SI_Ext_cp_to_TB,
+          show.se = FALSE, show.std = TRUE, show.stat = FALSE,  p.val = "kr", show.df = FALSE, p.style = "stars")
+
+tab_model(model_SI_Int_cp_to_BDI, model_SI_Ext_cp_to_BDI,
+          show.se = FALSE, show.std = TRUE, show.stat = FALSE,  p.val = "kr", show.df = FALSE, p.style = "stars")
+
+tab_model(model_SI_Int_cp_to_BHS, model_SI_Ext_cp_to_BHS,
+          show.se = FALSE, show.std = TRUE, show.stat = FALSE,  p.val = "kr", show.df = FALSE, p.style = "stars")
+
+tab_model(model_SI_Int_cp_to_RLS, model_SI_Ext_cp_to_RLS,
+          show.se = FALSE, show.std = TRUE, show.stat = FALSE,  p.val = "kr", show.df = FALSE, p.style = "stars")
+
+#### Both coping ####
+
+# with SI 
+model_SI_Int_cp_to_Ext <- lmer(
+  srcse ~ Int_cope_pmeans 
+  + Int_cope_pcent 
+  + month 
+  + ssi
+  + (1 | id),
+  data = Coping_data_filtered)
+
+(co_12 <- performance::check_outliers(model_SI_Int_cp_to_Ext, method = "all")) # 2 outliers detected: cases 54, 117.
+outlier_indices <- which(co_12)
+insight::get_data(model_SI_Int_cp_to_Ext)[outlier_indices, ] # BX-035 month 0, BX-096 month 0
+
+Coping_data_filtered_co_12 <- Coping_data_filtered[!(
+  (Coping_data_filtered$id == "BX-035" & Coping_data_filtered$month == 0) |
+  (Coping_data_filtered$id == "BX-096" & Coping_data_filtered$month == 0) 
+), ]
+
+model_SI_Int_cp_to_Ext <- lmer(
+  srcse ~ Int_cope_pmeans 
+  + Int_cope_pcent 
+  + month 
+  + ssi
+  + (1 | id),
+  data = Coping_data_filtered_co_12)
+
+(co_12 <- performance::check_outliers(model_SI_Int_cp_to_Ext, method = "all")) # No outliers detected
+
+# without SI
+model_Int_cp_to_Ext2 <- lmer(
+  srcse ~ Int_cope_pmeans 
+  + Int_cope_pcent 
+  + month 
+  + (1 | id),
+  data = Coping_data_filtered)
+
+(co_13 <- performance::check_outliers(model_Int_cp_to_Ext2, method = "all")) # 1 outlier detected: case 119.
+outlier_indices <- which(co_13)
+insight::get_data(model_Int_cp_to_Ext2)[outlier_indices, ] # BX-096 month 0
+
+# Remove outlier 
+Coping_data_filtered_co_13 <- Coping_data_filtered[!(Coping_data_filtered$id == "BX-096" 
+                                               & Coping_data_filtered$month == 0), ]
+
+model_Int_cp_to_Ext2 <- lmer(
+  srcse ~ Int_cope_pmeans 
+  + Int_cope_pcent 
+  + month 
+  + (1 | id),
+  data = Coping_data_filtered_co_13)
+
+(co_13 <- performance::check_outliers(model_Int_cp_to_Ext2, method = "all")) # No outliers detected
+
+#### Cohen's d (--power) ####
+
+lme.dscore(model_Int_cp_to_RLS, data = Coping_data_filtered, type = "lme4") # .5 without SI
+lme.dscore(model_Int_cp_to_BDI, data = Coping_data_filtered, type = "lme4") # .5 without SI
+lme.dscore(model_Int_cp_to_BHS, data = Coping_data_filtered, type = "lme4") # .5 without SI
+lme.dscore(model_Int_cp_to_PB, data = Coping_data_filtered, type = "lme4")  #  under .5 with SI
+lme.dscore(model_Int_cp_to_TB , data = Coping_data_filtered, type = "lme4") # .5 without SI
+
+tab_model(model_Int_cp_to_Ext2, model_SI_Int_cp_to_Ext, 
+          show.se = FALSE, show.std = TRUE, show.stat = FALSE,  p.val = "kr", show.df = FALSE, p.style = "stars")
+```
