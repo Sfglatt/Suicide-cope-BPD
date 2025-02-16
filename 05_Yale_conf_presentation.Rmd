@@ -1,0 +1,621 @@
+---
+title: "05_Yale_conf_presentation"
+output: github_document
+keep_html: TRUE
+---
+# Yale-NEABPD 2024 presentation script
+
+```{r Packages}
+if (!require("car")) {install.packages("car"); require("car")}
+if (!require("dplyr")) {install.packages("dplyr"); require("dplyr")}
+if (!require("EMAtools")) {install.packages("EMAtools"); require("EMAtools")}
+if (!require("ggplot2")) {install.packages("ggplot2"); require("ggplot2")}
+if (!require("ggstatsplot")) {install.packages("ggstatsplot"); require("ggstatsplot")}
+if (!require("gridExtra")) {install.packages("gridExtra"); require("gridExtra")}
+if (!require("insight")) {install.packages("insight"); require("insight")}
+if (!require("lme4")) {install.packages("lme4"); require("lme4")}
+if (!require("lmerTest")) {install.packages("lmerTest"); require("lmerTest")}
+if (!require("psych")) {install.packages("psych"); require("psych")}
+if (!require("rmcorr")) {install.packages("rmcorr"); require("rmcorr")}
+if (!require("r2mlm")) {install.packages("r2mlm"); require("r2mlm")}
+if (!require("sjPlot")) {install.packages("sjPlot"); require("sjPlot")}
+devtools::install_github("sjPlot/sjstats")
+if (!require("sjstats")) {install.packages("sjstats"); require("sjstats")}
+if (!require("tidyverse")) {install.packages("tidyverse"); require("tidyverse")}
+```
+
+```{r Functions}
+# Cohen's d for MLMs 
+lme.dscore <- function(mod,data,type){
+  if (type == "lme4") {
+    mod1 <- lmerTest::lmer(mod, data=data)
+    eff <- cbind(summary(mod1)$coefficients[,4], summary(mod1)$coefficients[,3])
+  }
+
+  if (type == "nlme") {
+    eff = cbind(summary(mod)$tTable[,4], summary(mod)$fixDF$terms)
+  }
+
+  colnames(eff) <- c("t","df")
+  eff <- as.data.frame(eff)
+  eff$d <- (2*eff$t)/sqrt(eff$df)
+  eff <- eff[-1,]
+  return(eff)
+}
+
+# Person means
+pmean <- function(ID,var){
+  centered <- ave(var, ID, FUN = function(x) mean(x, na.rm = TRUE))
+  return(centered)
+}
+
+# Person center
+pcenter<-function(ID,var){
+  centered<- var-ave(var, ID, FUN = function(x) mean(x, na.rm = TRUE))
+  return(centered)
+}
+
+# power curve
+ema.powercurve=function(NumbPart,NumbResp,days,respday,Est_ICC=.05,COL.8="red",COL.5="blue",COL.2="green"){
+
+
+  if(!missing(days) & !missing(respday)) {
+    NumbResp<-days*respday
+  } else {
+    NumbResp<-NumbResp
+  }
+
+  ### initate matricies ####
+  eff8a<-NULL;eff2a<-NULL;eff5a<-NULL
+
+  #### functions for power curves ####
+
+  for (PWR in c(0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,0.95,0.99)){
+    eff8<-(sjstats::smpsize_lmm(eff.size = 0.8, power = PWR, sig.level = 0.05, k = NumbPart, icc = Est_ICC,n=NumbResp))
+    eff8a<-as.data.frame(rbind(eff8a,eff8$`Subjects per Cluster`))
+  }
+
+  for (PWR in c(0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,0.95,0.99)){
+    eff5<-(sjstats::smpsize_lmm(eff.size = 0.5, power = PWR, sig.level = 0.05, k = NumbPart, icc = Est_ICC,n=NumbResp))
+    eff5a<-as.data.frame(rbind(eff5a,eff5$`Subjects per Cluster`))
+  }
+
+
+  for (PWR in c(0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,0.95,0.99)){
+    eff2<-(sjstats::smpsize_lmm(eff.size = 0.2, power = PWR, sig.level = 0.05, k = NumbPart, icc = Est_ICC,n=NumbResp))
+    eff2a<-as.data.frame(rbind(eff2a,eff2$`Subjects per Cluster`))
+  }
+
+
+  for (Add99 in c(10,20,30,40,50,60,70,75,80,85,90,95,100,105,110,115,120,125,130,140,150,160,170)){
+    eff2a<-as.data.frame(rbind(eff2a,(eff2$`Subjects per Cluster`+Add99)))
+    eff5a<-as.data.frame(rbind(eff5a,(eff5$`Subjects per Cluster`+Add99)))
+    eff8a<-as.data.frame(rbind(eff8a,(eff8$`Subjects per Cluster`+Add99)))
+  }
+
+  ### merging curves ###
+  power<-rbind(0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,0.95,0.99,0.99,0.99,0.99,0.99,0.99,0.99,0.99,0.99,0.99,0.99,0.99,0.99,0.99,0.99,0.99,0.99,0.99,0.99,0.99,0.99,0.99,0.99,0.99)
+
+  ### creating response rate lines
+
+
+  NumbRespColumn<-cbind(rep(c((NumbResp*.50),(NumbResp*.75),(NumbResp)),each=34))
+
+  LabResp<-cbind(rep(c("50%","75%","100%"),each=34))
+
+  comp_final<-as.data.frame(cbind((rbind(power,power,power)),NumbRespColumn,LabResp))
+  colnames(comp_final)<-c("power","NumbRespColumn","Response_Rate")
+
+
+  lg<-data.frame(cbind(power,eff8a,"Large (d=0.8)"));colnames(lg)<-c("Power","Resp","Effect_Size")
+  md<-data.frame(cbind(power,eff5a,"Medium (d=0.5)"));colnames(md)<-c("Power","Resp","Effect_Size")
+  sm<-data.frame(cbind(power,eff2a,"Small (d=0.2)"));colnames(sm)<-c("Power","Resp","Effect_Size")
+
+  eff_final<-rbind(lg,md,sm)
+
+
+
+  #### create ggplot ###
+
+  xlab_chart <- paste("Responses per participant (n =",NumbPart,"participants)" )
+
+  #  ggplot2::scale_x_continuous(limits = c(0,(round((NumbResp+40),-1))),breaks =seq(0, (round(NumbResp+40,-1)), by=20))+
+  #round_any(NumbResp, 10, f = ceiling)
+
+  if(NumbResp<=10) {Figure_X_Limit<-10}
+  if (NumbResp>10 & NumbResp<=15) {Figure_X_Limit<-15}
+  if (NumbResp>15 & NumbResp<=20) {Figure_X_Limit<-20}
+  if(NumbResp>20) {Figure_X_Limit<-(plyr::round_any(NumbResp, 10, f = ceiling)+10)}
+
+  if(max(eff_final[(eff_final$Resp<NumbResp & eff_final$Effect_Size=="Large (d=0.8)"),]$Power)==0.99) {
+    eff_final<-rbind(eff_final,data.frame(Power=0.99,Resp=NumbResp,Effect_Size="Large (d=0.8)"))}
+
+  if(max(eff_final[(eff_final$Resp<NumbResp & eff_final$Effect_Size=="Medium (d=0.5)"),]$Power)==0.99) {
+    eff_final<-rbind(eff_final,data.frame(Power=0.99,Resp=NumbResp,Effect_Size="Medium (d=0.5)"))}
+
+
+
+  PowerPlot1<-ggplot2::ggplot()+ ggplot2::geom_line(ggplot2::aes(x = Resp,y = Power,color=Effect_Size),size=1, data=eff_final[eff_final$Resp<=NumbResp,])+
+    ggplot2::xlab(xlab_chart) +
+    ggplot2::ylab("Power (1-beta)") +
+    ggplot2::scale_y_continuous(breaks=c(0,0.2,0.4,0.6,0.8,1.00), limits=c(0.1,1.00))+
+    ggplot2::geom_vline(xintercept=(NumbResp*.50),color="grey65", linetype = 3)+
+    ggplot2::geom_vline(xintercept=(NumbResp*.75),color="grey65", linetype = 2)+
+    ggplot2::scale_x_continuous(limits = c(0,Figure_X_Limit))+
+    ggplot2::geom_vline(xintercept=(NumbResp),color="grey65", linetype = 1)+
+    ggplot2::geom_line(ggplot2::aes(x = as.numeric(NumbRespColumn), y = as.numeric(power), linetype=Response_Rate), data=comp_final,color="grey65")+
+    ggplot2::theme_classic() + ggplot2::scale_linetype(name="Completion rate") +
+    ggplot2::scale_color_manual(name="Effect Size",values=c(COL.8,COL.5,COL.2))
+  return(PowerPlot1)
+}
+```
+
+```{r Data}
+Coping_data_filtered <- read.csv("Created_datasets/Secondary_coping_data_2024_07_12.csv") 
+```
+
+```{r Visualization}
+# find participants with 4 timepoints for visualization purposes
+time_points_summary <- Coping_data_filtered %>%
+  group_by(id) %>%
+  dplyr::summarize(
+    INQ = sum(!is.na(inq)),
+    BHS = sum(!is.na(bhs)),
+    BDI = sum(!is.na(bdi)),
+    SRC = sum(!is.na(srcs17)),
+    SSI = sum(!is.na(ssi)), 
+    RLS = sum(!is.na(rls)),
+    bpaqa = sum(!is.na(bpaqa)), 
+    bpaqh = sum(!is.na(bpaqh)),
+    bpaqpa = sum(!is.na(bpaqpa)),
+    bpaqva = sum(!is.na(bpaqva)),
+    ATSPPH = sum(!is.na(atspph)))
+
+view(time_points_summary[time_points_summary$INQ == 4, ])
+
+ID_data_subset <- subset(Coping_data_filtered, id == "BX-146")
+
+summary(ID_data_subset$arm_rec)
+scaled_data <- ID_data_subset %>%
+  dplyr::select(month, id, bdi, ssi, bhs, rls, inq_tb, inq_pb, SRC_17_pmeans, srcs17) %>%
+  dplyr::mutate(across(c(bdi, ssi, bhs, rls, inq_tb, inq_pb, srcs17), scale))
+
+scaled_data$SRC_17_pmeans_SCALED <- pmean(scaled_data$id, scaled_data$srcs17)
+
+# resolution
+tiff("05_Output/bx146.tiff", units = "in", width = 5, height = 5, res = 300)
+ggplot(scaled_data, aes(x = month)) +
+  geom_line(aes(y = bhs), color = "blue", size = 1.5) +  
+  geom_line(aes(y = SRC_17_pmeans_SCALED), color = "#FF3399", linetype = "dashed", size = 1.5) +  
+  geom_line(aes(y = srcs17), color = "#FF3399", size = 2.1) +
+  geom_line(aes(y = bdi), color = "orange", size = 1.5) +  
+  geom_line(aes(y = ssi), color = "grey", size = 1.5) +  
+  geom_line(aes(y = rls), color = "green", size = 1.5) +  
+  geom_line(aes(y = inq_tb), color = "#9966FF", size = 1.5) +  
+  geom_line(aes(y = inq_pb), color = "brown", size = 1.5) +
+  geom_point(aes(y = bhs), color = "blue", size = 4.5) +
+  geom_point(aes(y = srcs17), color = "#FF3399", size = 4.5) +  
+  geom_point(aes(y = bdi), color = "orange", size = 4.5) + 
+  geom_point(aes(y = inq_tb), color = "#9966FF", size = 4.5) + 
+  geom_point(aes(y = inq_pb), color = "brown", size = 4.5) + 
+  geom_point(aes(y = ssi), color = "grey", size = 4.5) +  
+  geom_point(aes(y = rls), color = "green", size = 4.5) +  
+  labs(title = "",
+       x = "Wave",
+       y = "Values") +
+  scale_x_discrete(labels = c("0" = "1", "3" = "2", "6" = "3", "12" = "4")) + 
+  theme_minimal()
+dev.off()
+
+### All raw (centered) plots ####
+filtered_data <- time_points_summary[time_points_summary$SRC == 4, ]
+
+participant_dataframes <- list()
+
+for (id_val in unique(filtered_data$id)) {
+  
+  ID_data_subset <- subset(Coping_data_filtered, id == id_val)
+  
+  scaled_data <- ID_data_subset %>%
+    dplyr::select(month, id, bdi, ssi, bhs, rls, inq_tb, inq_pb, SRC_17_pmeans, srcs17) %>%
+    dplyr::mutate(across(c(bdi, ssi, bhs, rls, inq_tb, inq_pb, srcs17), scale))
+  
+  scaled_data$SRC_17_pmeans_SCALED <- mean(scaled_data$srcs17)
+  
+  participant_dataframes[[paste0("participant_", id_val, "_data")]] <- scaled_data
+  
+  print(paste("Data for participant", id_val))
+}
+
+create_plot <- function(df, id, filename) {
+  p <- ggplot(df, aes(x = month)) +
+    geom_line(aes(y = bhs), color = "blue", size = 1.5) +  
+    geom_line(aes(y = SRC_17_pmeans_SCALED), color = "#FF3399", linetype = "dashed", size = 1.5) +  
+    geom_line(aes(y = srcs17), color = "#FF3399", size = 2.1) +
+    geom_line(aes(y = bdi), color = "orange", size = 1.5) +  
+    geom_line(aes(y = ssi), color = "grey", size = 1.5) +  
+    geom_line(aes(y = rls), color = "green", size = 1.5) +  
+    geom_line(aes(y = inq_tb), color = "#9966FF", size = 1.5) +  
+    geom_line(aes(y = inq_pb), color = "brown", size = 1.5) +
+    geom_point(aes(y = bhs), color = "blue", size = 4.5) +
+    geom_point(aes(y = srcs17), color = "#FF3399", size = 4.5) +  
+    geom_point(aes(y = bdi), color = "orange", size = 4.5) + 
+    geom_point(aes(y = inq_tb), color = "#9966FF", size = 4.5) + 
+    geom_point(aes(y = inq_pb), color = "brown", size = 4.5) + 
+    geom_point(aes(y = ssi), color = "grey", size = 4.5) +  
+    geom_point(aes(y = rls), color = "green", size = 4.5) +  
+    labs(title = "",
+         x = "Wave",
+         y = "Values") +
+    scale_x_discrete(labels = c("0" = "1", "3" = "2", "6" = "3", "12" = "4")) + 
+    theme_minimal()
+  
+  png(filename, width = 800, height = 600)
+  print(p)
+  dev.off()
+}
+
+for (key in names(participant_dataframes)) {
+  filename <- paste0("05_Output/plot_", gsub("participant_", "", key), ".png")
+  create_plot(participant_dataframes[[key]], gsub("_data", "", gsub("participant_", "", key)), filename)
+}
+```
+
+```{r MLM power}
+#### Power curves ####
+
+ema.powercurve(NumbPart = 98, 
+               NumbResp = 4, 
+               days = 4, 
+               respday = 1, 
+               Est_ICC = 0.50, 
+               COL.8 = "red", COL.5 = "blue", COL.2 = "green" )
+```
+
+```{r MLM data prep}
+# Participant-mean scores for coping
+Coping_data_filtered$SRC_17_pmeans <- pmean(Coping_data_filtered$id,
+                                            Coping_data_filtered$srcs17)
+
+# person-centered means coping
+Coping_data_filtered$SRC_17_pcent <- pcenter(Coping_data_filtered$id,
+                                             Coping_data_filtered$srcs17)
+
+# participant-mean scores for External coping
+Coping_data_filtered$Ext_cope_pmeans <- pmean(Coping_data_filtered$id,
+                                              Coping_data_filtered$srcse)
+
+# person-centered means for External coping
+Coping_data_filtered$Ext_cope_pcent <- pcenter(Coping_data_filtered$id,
+                                               Coping_data_filtered$srcse)
+
+# participant-mean scores for Internal coping
+Coping_data_filtered$Int_cope_pmeans <- pmean(Coping_data_filtered$id,
+                                              Coping_data_filtered$srcsi)
+
+# person-centered means for Internal coping
+Coping_data_filtered$Int_cope_pcent <- pcenter(Coping_data_filtered$id,
+                                               Coping_data_filtered$srcsi)
+
+# Intercept only models 
+
+uncon_inq <- lmer(inq ~ 1 + (1 | id), data = Coping_data_filtered)
+tab_model(uncon_inq, p.val = "kr") # ICC = .48
+
+uncon_bdi <- lmer(bdi ~ 1 + (1 | id), data = Coping_data_filtered)
+tab_model(uncon_bdi, p.val = "kr") # ICC = .49
+
+uncon_bhs <- lmer(bhs ~ 1 + (1 | id), data = Coping_data_filtered)
+tab_model(uncon_bhs, p.val = "kr") # ICC = .49
+
+uncon_rls <- lmer(rls ~ 1 + (1 | id), data = Coping_data_filtered)
+tab_model(uncon_rls,  p.val = "kr") # ICC = .47
+
+uncon_ext_coping <- lmer(srcse ~ 1 + (1 | id), data = Coping_data_filtered)
+tab_model(uncon_ext_coping) # ICC = .44
+
+uncon_int_coping <- lmer(srcsi ~ 1 + (1 | id), data = Coping_data_filtered)
+tab_model(uncon_int_coping,  p.val = "kr") # ICC = .45
+```
+
+```{r MLM main models}
+##### BDI #####
+
+model_SRC_17_to_BDI <- lmer(
+  bdi ~ SRC_17_pmeans # created above
+  + SRC_17_pcent      # created above
+  + month 
+  # + ssi
+  + (1 | id),
+  data = Coping_data_filtered)
+
+(co_1 <- performance::check_outliers(model_SRC_17_to_BDI, method = "all")) # No outliers detected
+
+##### TB #####
+
+model_SRC_17_to_TB <- lmer(
+  inq_tb ~ SRC_17_pmeans 
+  + SRC_17_pcent 
+  + month 
+  # + ssi
+  + (1 | id),
+  data = Coping_data_filtered)
+
+# options(mc.cores = 4)
+# (co_1 <- performance::check_outliers(model_SRC_17_to_TB, method = "all")) # No outliers detected
+
+##### PB #####
+
+model_SRC_17_to_PB <- lmer(
+  inq_pb ~ SRC_17_pmeans 
+  + SRC_17_pcent 
+  + month 
+  # + ssi
+  + (1 | id),
+  data = Coping_data_filtered)
+
+# options(mc.cores = 4)
+(co_1 <- performance::check_outliers(model_SRC_17_to_PB, method = "all")) # No outliers detected
+
+##### BHS ###
+
+model_SRC_17_to_BHS <- lmer(
+  bhs ~ SRC_17_pmeans 
+  + SRC_17_pcent 
+  + month 
+  # + ssi
+  + (1 | id),
+  data = Coping_data_filtered)
+
+(co_3 <- performance::check_outliers(model_SRC_17_to_BHS, method = "all")) # No outliers detected
+
+##### RLS #####
+
+model_SRC_17_to_RLS <- lmer(
+  rls ~ SRC_17_pmeans 
+  + SRC_17_pcent 
+  + month 
+  # + ssi
+  + (1 | id),
+  data = Coping_data_filtered)
+
+# (co_4 <- performance::check_outliers(model_SRC_17_to_RLS, method = "all")) # No outliers detected
+
+#### Tables ####
+
+tab_model(model_SRC_17_to_BHS, model_SRC_17_to_BDI,
+          show.se = FALSE, show.std = TRUE, show.stat = FALSE,  p.val = "kr", show.df = FALSE, p.style = "stars")
+
+tab_model(model_SRC_17_to_RLS,
+          show.se = FALSE, show.std = TRUE, show.stat = FALSE,  p.val = "kr", show.df = FALSE, p.style = "stars")
+
+tab_model(model_SRC_17_to_PB, model_SRC_17_to_TB,
+          show.se = FALSE, show.std = TRUE, show.stat = FALSE,  p.val = "kr", show.df = FALSE, p.style = "stars")
+
+#### Cohen's d (--power) ####
+
+lme.dscore(model_SRC_17_to_RLS, data = Coping_data_filtered, type = "lme4") 
+lme.dscore(model_SRC_17_to_BDI, data = Coping_data_filtered, type = "lme4") 
+lme.dscore(model_SRC_17_to_BHS, data = Coping_data_filtered, type = "lme4") 
+lme.dscore(model_SRC_17_to_PB, data = Coping_data_filtered, type = "lme4")
+lme.dscore(model_SRC_17_to_TB, data = Coping_data_filtered, type = "lme4")
+```
+
+```{r MLM main models adjusting SI}
+##### BDI #####
+
+model_SI_SRC_17_to_BDI <- lmer(
+  bdi ~ SRC_17_pmeans 
+  + SRC_17_pcent 
+  + month 
+  + ssi
+  + (1 | id),
+  data = Coping_data_filtered)
+
+(co_1 <- performance::check_outliers(model_SI_SRC_17_to_BDI, method = "all")) # 1 outlier detected: case 200
+outlier_indices <- which(co_1)
+insight::get_data(model_SI_SRC_17_to_BDI)[outlier_indices, ] # BX-162 month 6
+
+# Remove outlier 
+Coping_data_filtered_co_1 <- Coping_data_filtered[!(Coping_data_filtered$id == "BX-162" 
+                                               & Coping_data_filtered$month == 6), ]
+
+model_SI_SRC_17_to_BDI <- lmer(
+  bdi ~ SRC_17_pmeans 
+  + SRC_17_pcent 
+  + month 
+  + ssi
+  + (1 | id),
+  data = Coping_data_filtered_co_1)
+
+(co_1 <- performance::check_outliers(model_SI_SRC_17_to_BDI, method = "all")) # 1 outlier detected: case 24
+outlier_indices <- which(co_1)
+insight::get_data(model_SI_SRC_17_to_BDI)[outlier_indices, ] # BX-162 month 6
+
+# Remove outlier 
+Coping_data_filtered_co_1 <- Coping_data_filtered_co_1[!(Coping_data_filtered_co_1$id == "BX-035" 
+                                                         & Coping_data_filtered_co_1$month == 0), ]
+
+model_SI_SRC_17_to_BDI <- lmer(
+  bdi ~ SRC_17_pmeans 
+  + SRC_17_pcent 
+  + month 
+  + ssi
+  + (1 | id),
+  data = Coping_data_filtered_co_1)
+
+(co_1 <- performance::check_outliers(model_SI_SRC_17_to_BDI, method = "all")) # OK: No outliers detected.
+
+##### INQ #####
+
+model_SI_SRC_17_to_INQ <- lmer(
+  inq ~ SRC_17_pmeans 
+  + SRC_17_pcent 
+  + month 
+  + ssi
+  + (1 | id),
+  data = Coping_data_filtered)
+
+(co_2 <- performance::check_outliers(model_SI_SRC_17_to_INQ, method = "all")) # 1 outlier detected: case 200
+outlier_indices <- which(co_2)
+insight::get_data(model_SI_SRC_17_to_INQ)[outlier_indices, ] # BX-035 month 0
+
+# Remove outlier 
+Coping_data_filtered_co_2 <- Coping_data_filtered[!(Coping_data_filtered$id == "BX-035" &
+                                                     (Coping_data_filtered$month == 0 |
+                                                      Coping_data_filtered$month == 3)), 
+                                                  # & month 3 - after another round of outlier removal
+                                                  ]
+
+model_SI_SRC_17_to_INQ <- lmer(
+  inq ~ SRC_17_pmeans 
+  + SRC_17_pcent 
+  + month 
+  + ssi
+  + (1 | id),
+  data = Coping_data_filtered_co_2)
+
+(co_2 <- performance::check_outliers(model_SI_SRC_17_to_INQ, method = "all")) 
+outlier_indices <- which(co_2)
+insight::get_data(model_SI_SRC_17_to_INQ)[outlier_indices, ] # BX-106 month 12
+
+# Remove outlier 
+Coping_data_filtered_co_2 <- Coping_data_filtered_co_2[!(Coping_data_filtered_co_2$id == "BX-106" 
+                                                         & Coping_data_filtered_co_2$month == 12), ] 
+# no outliers detected after that
+
+###### PB ######
+
+model_SI_SRC_17_to_PB <- lmer(
+  inq_pb ~ SRC_17_pmeans 
+  + SRC_17_pcent 
+  + month 
+  + ssi
+  + (1 | id),
+  data = Coping_data_filtered)
+
+(co_2 <- performance::check_outliers(model_SI_SRC_17_to_PB, method = "all")) # 1 outlier detected: case 54
+outlier_indices <- which(co_2)
+insight::get_data(model_SI_SRC_17_to_PB)[outlier_indices, ] # BX-035 month 0
+
+# Remove outlier 
+Coping_data_filtered_co_2 <- Coping_data_filtered[!(Coping_data_filtered$id == "BX-035" & Coping_data_filtered$month == 0),]
+
+model_SI_SRC_17_to_PB <- lmer(
+  inq_pb ~ SRC_17_pmeans 
+  + SRC_17_pcent 
+  + month 
+  + ssi
+  + (1 | id),
+  data = Coping_data_filtered_co_2)
+
+(co_2 <- performance::check_outliers(model_SI_SRC_17_to_PB, method = "all")) 
+outlier_indices <- which(co_2)
+insight::get_data(model_SI_SRC_17_to_PB)[outlier_indices, ] # BX-034 month 0 
+
+# Remove outlier 
+Coping_data_filtered_co_3 <- Coping_data_filtered_co_2[!(Coping_data_filtered_co_2$id == "BX-034" 
+                                                         & Coping_data_filtered_co_2$month == 0),]
+
+model_SI_SRC_17_to_PB <- lmer(
+  inq_pb ~ SRC_17_pmeans 
+  + SRC_17_pcent 
+  + month 
+  + ssi
+  + (1 | id),
+  data = Coping_data_filtered_co_3)
+
+(co_3 <- performance::check_outliers(model_SI_SRC_17_to_PB, method = "all")) 
+outlier_indices <- which(co_3) # none
+
+###### TB ######
+
+model_SI_SRC_17_to_TB <- lmer(
+  inq_tb ~ SRC_17_pmeans 
+  + SRC_17_pcent 
+  + month 
+  + ssi
+  + (1 | id),
+  data = Coping_data_filtered)
+
+(co_2 <- performance::check_outliers(model_SI_SRC_17_to_TB, method = "all")) # 1 outlier detected: case 54
+outlier_indices <- which(co_2)
+insight::get_data(model_SI_SRC_17_to_TB)[outlier_indices, ] # BX-106 month 12
+
+# Remove outlier 
+Coping_data_filtered_co_2 <- Coping_data_filtered[!(Coping_data_filtered$id == "BX-106" 
+                                                    & Coping_data_filtered$month == 12),]
+
+model_SI_SRC_17_to_TB <- lmer(
+  inq_tb ~ SRC_17_pmeans 
+  + SRC_17_pcent 
+  + month 
+  + ssi
+  + (1 | id),
+  data = Coping_data_filtered_co_2)
+
+(co_2 <- performance::check_outliers(model_SI_SRC_17_to_TB, method = "all")) # 1 outlier detected: case 54
+outlier_indices <- which(co_2)
+insight::get_data(model_SI_SRC_17_to_TB)[outlier_indices, ] # no more
+
+##### BHS ####
+
+model_SI_SRC_17_to_BHS <- lmer(
+  bhs ~ SRC_17_pmeans 
+  + SRC_17_pcent 
+  + month 
+  + ssi
+  + (1 | id),
+  data = Coping_data_filtered)
+
+(co_3 <- performance::check_outliers(model_SI_SRC_17_to_BHS, method = "all")) # 2 outliers detected: cases 26, 54.
+outlier_indices <- which(co_3)
+insight::get_data(model_SI_SRC_17_to_BHS)[outlier_indices, ] # BX-035 month 0 and BX-014 month 6
+
+Coping_data_filtered_co_3 <- Coping_data_filtered[!(
+  (Coping_data_filtered$id == "BX-035" & Coping_data_filtered$month == 0) |
+  (Coping_data_filtered$id == "BX-014" & Coping_data_filtered$month == 6)
+), ]
+
+model_SI_SRC_17_to_BHS <- lmer(
+  bhs ~ SRC_17_pmeans 
+  + SRC_17_pcent 
+  + month 
+  + ssi
+  + (1 | id),
+  data = Coping_data_filtered_co_3)
+
+(co_3 <- performance::check_outliers(model_SI_SRC_17_to_BHS, method = "all")) # No outliers detected.
+
+##### RLS #####
+
+model_SI_SRC_17_to_RLS <- lmer(
+  rls ~ SRC_17_pmeans 
+  + SRC_17_pcent 
+  + month 
+  + ssi
+  + (1 | id),
+  data = Coping_data_filtered)
+
+(co_4 <- performance::check_outliers(model_SI_SRC_17_to_RLS, method = "all")) # No outliers detected
+
+#### Tables ####
+
+tab_model(model_SI_SRC_17_to_BHS, model_SI_SRC_17_to_BDI,
+          show.se = FALSE, show.std = TRUE, show.stat = FALSE,  p.val = "kr", show.df = FALSE, p.style = "stars")
+
+tab_model(model_SI_SRC_17_to_TB, model_SI_SRC_17_to_PB,
+          show.se = FALSE, show.std = TRUE, show.stat = FALSE,  p.val = "kr", show.df = FALSE, p.style = "stars")
+
+tab_model(model_SI_SRC_17_to_RLS,
+          show.se = FALSE, show.std = TRUE, show.stat = FALSE,  p.val = "kr", show.df = FALSE, p.style = "stars")
+
+#### Cohen's d (--power) ####
+
+lme.dscore(model_SI_SRC_17_to_RLS, data = Coping_data_filtered, type = "lme4") 
+lme.dscore(model_SI_SRC_17_to_BDI, data = Coping_data_filtered, type = "lme4") 
+lme.dscore(model_SI_SRC_17_to_BHS, data = Coping_data_filtered, type = "lme4") 
+lme.dscore(model_SI_SRC_17_to_PB, data = Coping_data_filtered, type = "lme4")
+lme.dscore(model_SI_SRC_17_to_TB, data = Coping_data_filtered, type = "lme4")
+```
+
